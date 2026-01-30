@@ -275,6 +275,45 @@ GET /api/delegation-status/:address
 
 ---
 
+### 7. 查询UserOp Nonce
+
+```http
+GET /api/nonce/:address
+```
+
+**描述**: 查询账户的UserOp nonce。
+
+**说明**:
+- UserOp nonce与EOA交易nonce不同
+- UserOp nonce存储在Kernel合约中，用于ERC-4337流程
+- EOA nonce可通过`eth_getTransactionCount` RPC查询
+
+**路径参数**:
+- `address`: 要查询的账户地址
+
+**响应** (200):
+```json
+{
+  "success": true,
+  "data": {
+    "address": "0x...",       // 查询的地址
+    "nonce": "0",             // 当前UserOp nonce
+    "timestamp": 1700000000000
+  }
+}
+```
+
+**示例**:
+```bash
+curl http://localhost:3000/api/nonce/0x1234...
+```
+
+**用途**:
+- 构造新的UserOp时需要正确的nonce值
+- 防止UserOp重放攻击
+
+---
+
 ## 错误代码
 
 | 代码 | 描述 |

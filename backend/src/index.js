@@ -15,6 +15,7 @@ import { config } from './config.js';
 import { executeUserOp } from './routes/execute.js';
 import { simulateUserOp } from './routes/simulate.js';
 import { getDelegationStatus } from './routes/delegationStatus.js';
+import { getNonce } from './routes/nonce.js';
 import { constructCalldata } from './routes/constructCalldata.js';
 import { sendRawTransaction } from './routes/sendRaw.js';
 
@@ -79,6 +80,7 @@ app.post('/api/simulate', simulateUserOp);
 app.post('/api/construct-calldata', constructCalldata);
 app.post('/api/send-raw', sendRawTransaction);
 app.get('/api/delegation-status/:address', getDelegationStatus);
+app.get('/api/nonce/:address', getNonce);
 
 // 404处理 - 统一错误格式
 app.use((req, res) => {
@@ -93,6 +95,7 @@ app.use((req, res) => {
         'POST /api/construct-calldata',
         'POST /api/send-raw',
         'GET /api/delegation-status/:address',
+        'GET /api/nonce/:address',
         'GET /health'
       ]
     }
@@ -116,6 +119,7 @@ app.listen(config.port, () => {
 ║  - POST /api/construct-calldata (构造calldata)             ║
 ║  - POST /api/send-raw       (发送原始交易)                  ║
 ║  - GET  /api/delegation-status/:address (查询delegation)   ║
+║  - GET  /api/nonce/:address (查询UserOp nonce)             ║
 ║  - GET  /health             (健康检查)                      ║
 ╚══════════════════════════════════════════════════════════════╝
   `);
