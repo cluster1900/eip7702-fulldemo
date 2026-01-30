@@ -9,6 +9,7 @@ import { executeUserOp } from './routes/execute.js';
 import { simulateUserOp } from './routes/simulate.js';
 import { getDelegationStatus } from './routes/delegationStatus.js';
 import { getNonce } from './routes/nonce.js';
+import { getKernelInfo } from './routes/kernel.js';
 
 const app = express();
 
@@ -34,6 +35,7 @@ app.post('/api/execute', executeUserOp);
 app.post('/api/simulate', simulateUserOp);
 app.get('/api/delegation-status/:address', getDelegationStatus);
 app.get('/api/nonce/:address', getNonce);
+app.get('/api/kernel/address', getKernelInfo);
 
 // 404处理
 app.use((req, res) => {

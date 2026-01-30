@@ -8,7 +8,7 @@
 - ✅ **ERC20 Gas Payment**: 用USDC等代币支付gas费
 - ✅ **批量交易**: executeBatch一次执行多个call
 - ✅ **ERC-4337兼容**: 标准UserOperation流程
-- ✅ **完整测试**: Foundry测试套件 (10/10通过)
+- ✅ **完整测试**: Foundry测试套件 (19/19通过)
 
 ## 📁 项目结构
 
@@ -17,17 +17,29 @@ eip7702/
 ├── contracts/           # Solidity智能合约
 │   ├── src/
 │   │   └── Kernel.sol  # 核心钱包合约
-│   └── test/
-│       └── Kernel.t.sol # 完整测试 (10个测试用例)
+│   ├── test/
+│   │   ├── Kernel.t.sol        # 核心功能测试 (10个)
+│   │   ├── FullFlowTest.t.sol  # 完整流程测试 (4个)
+│   │   ├── BGasCompensation.t.sol # Gas补偿测试 (2个)
+│   │   ├── E2EIntegration.t.sol   # E2E集成测试 (1个)
+│   │   └── Counter.t.sol       # 其他测试 (2个)
+│   └── script/
+│       ├── Deploy.s.sol        # 部署脚本
+│       └── E2ETest.s.sol       # E2E测试脚本
 ├── backend/             # Node.js后端API
-│   ├── src/
-│   │   ├── index.js     # Express服务器
-│   │   ├── routes/      # API endpoints
-│   │   └── services/    # Bundler, 验证, 缓存
-│   └── .env.example     # 环境变量示例
-├── openspec/            # OpenSpec规范和proposals
-│   ├── specs/           # 5个capability规范
-│   └── changes/         # 3个implementation proposals
+│   └── src/
+│       ├── index.js            # Express服务器
+│       ├── config.js           # 配置管理
+│       ├── routes/
+│       │   ├── execute.js      # POST /api/execute
+│       │   ├── simulate.js     # POST /api/simulate
+│       │   ├── nonce.js        # GET /api/nonce/:address
+│       │   ├── kernel.js       # GET /api/kernel/address
+│       │   └── delegationStatus.js  # GET /api/delegation-status/:address
+│       └── services/
+│           ├── bundler.js      # Bundler服务
+│           ├── validation.js   # 签名验证
+│           └── cache.js        # 缓存服务
 └── README.md
 ```
 
@@ -60,7 +72,7 @@ cp .env.example .env
 cd contracts
 forge test -vvv --gas-report
 
-# 输出: 10/10 tests passed ✅
+# 输出: 19/19 tests passed ✅
 ```
 
 ### 4. 启动后端
@@ -132,6 +144,18 @@ npm start
 }
 ```
 
+### 4. GET /api/kernel/address
+获取Kernel和EntryPoint合约地址
+
+**响应:**
+```json
+{
+  "kernelAddress": "0x...",
+  "entryPointAddress": "0x...",
+  "chainId": 31337
+}
+```
+
 ### POST /api/simulate
 模拟执行UserOperation (不发送真实交易)
 
@@ -149,8 +173,8 @@ npm start
 
 ```
 ┌─────────────┐       ┌─────────────┐       ┌─────────────┐
-│   前端      │       │  Backend    │       │   链上      │
-│  (MetaMask) │──────>│  Bundler    │──────>│  Kernel     │
+│   Client    │       │  Backend    │       │   链上      │
+│  (dApp/API) │──────>│  Bundler    │──────>│  Kernel     │
 │             │       │  Express    │       │  Contract   │
 └─────────────┘       └─────────────┘       └─────────────┘
       │                      │                      │
@@ -161,7 +185,7 @@ npm start
       │                    │ 5. 发送到链上        │
       │                    │                      │ 6. validateUserOp
       │                    │                      │ 7. executeBatch
-      │                    │<─────────────────────│ 8. USDC支付
+      │                    │<─────────────────────│ 8. ERC20支付gas
       │<───────────────────│ 9. 返回txHash       │
 ```
 
@@ -202,8 +226,9 @@ function getNonce(address user) external view returns (uint256);
 cd contracts && forge test -vvv
 ```
 
-**10个测试用例 (全部通过):**
+**19个测试用例 (全部通过):**
 
+### KernelTest (10个测试)
 1. ✅ testValidateUserOp_Success
 2. ✅ testValidateUserOp_WithGasPayment (USDC转账)
 3. ✅ testValidateUserOp_InvalidSignature
@@ -214,6 +239,21 @@ cd contracts && forge test -vvv
 8. ✅ testExecuteBatch_OnlyEntryPoint
 9. ✅ testGetNonce_NewAddress
 10. ✅ testGetNonce_AfterExecution
+
+### FullFlowTest (4个测试)
+11. ✅ test_FullPaymasterFlow_TransferWithGasCompensation
+12. ✅ test_BatchTransfersWithGasCompensation
+13. ✅ test_GaslessSponsorFlow
+14. ✅ test_MultipleUserOps
+
+### BGasCompensationTest (2个测试)
+15. ✅ test_BDelegateAndPayGas
+16. ✅ test_RejectsWrongNonce
+
+### 其他测试 (3个)
+17. ✅ test_E2E_FullFlow (E2E集成测试)
+18. ✅ test_Increment (Counter)
+19. ✅ testFuzz_SetNumber (Counter模糊测试)
 
 **Gas报告:**
 - validateUserOp: ~49k gas
@@ -309,10 +349,12 @@ MIT License
 
 ---
 
-**项目状态**: MVP完成 ✅ (Kernel合约 + Backend API + 完整测试)
+**项目状态**: 完整实现 ✅ (Kernel合约 + Backend API + 19个测试全部通过)
 
-**下一步**: 
-- 前端界面开发 (可选)
-- Testnet部署测试
-- 集成测试自动化
-- 文档完善
+**已完成**:
+- ✅ Kernel合约实现 (validateUserOp, executeBatch, getNonce, executeTokenTransfer)
+- ✅ 后端API (5个endpoint全部实现)
+- ✅ 完整测试覆盖 (19/19测试通过)
+- ✅ EIP-7702完整流程测试
+- ✅ ERC20 gas支付测试
+- ✅ 批量交易测试
