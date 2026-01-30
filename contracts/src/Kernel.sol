@@ -39,7 +39,7 @@ contract Kernel {
     // Events
     event UserOperationExecuted(address indexed sender, uint256 nonce, bool success);
     event BatchExecuted(address indexed sender, uint256 numCalls);
-    event GasPaymentProcessed(address indexed sender, address indexed token, uint256 amount);
+    event GasPaymentProcessed(address indexed sender, address indexed token, uint256 amount, address indexed payee);
 
     // Errors
     error OnlyEntryPoint();
@@ -87,11 +87,12 @@ contract Kernel {
                 (address, uint256)
             );
             
-            // Transfer ERC20 from user to EntryPoint (msg.sender)
-            // In production, EntryPoint will forward to Bundler
-            IERC20(token).transferFrom(userOp.sender, msg.sender, amount);
+            // Transfer ERC20 from user to Bundler
+            // tx.origin is bundler when called via prank(entryPoint, bundler)
+            address payee = tx.origin;
+            IERC20(token).transferFrom(userOp.sender, payee, amount);
             
-            emit GasPaymentProcessed(userOp.sender, token, amount);
+            emit GasPaymentProcessed(userOp.sender, token, amount, payee);
         }
 
         return 0; // Validation success
@@ -147,12 +148,8 @@ contract Kernel {
         }
 
         // EIP-2 still allows signature malleability for ecrecover
-        if (uint256(s) > 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0) {
-            return address(0);
-        }
-        if (v != 27 && v != 28) {
-            return address(0);
-        }
+        require(uint256(s) <= 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0, "Invalid signature 's' value");
+        require(v == 27 || v == 28, "Invalid signature 'v' value");
 
         return ecrecover(messageHash, v, r, s);
     }
