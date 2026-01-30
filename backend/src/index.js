@@ -1,6 +1,13 @@
 /**
  * EIP-7702 Account Abstraction Backend API
- * Express服务器入口
+ * 后端API入口 - 提供UserOperation构造和执行接口
+ *
+ * 功能:
+ * 1. 构造UserOp calldata
+ * 2. 发送EIP-7702 type 0x04交易
+ * 3. 查询账户delegation状态
+ *
+ * @see docs/API.md 查看API调用文档
  */
 import express from 'express';
 import cors from 'cors';
@@ -8,23 +15,57 @@ import { config } from './config.js';
 import { executeUserOp } from './routes/execute.js';
 import { simulateUserOp } from './routes/simulate.js';
 import { getDelegationStatus } from './routes/delegationStatus.js';
-import { getNonce } from './routes/nonce.js';
-import { getKernelInfo } from './routes/kernel.js';
 import { constructCalldata } from './routes/constructCalldata.js';
 import { sendRawTransaction } from './routes/sendRaw.js';
 
 const app = express();
 
+// 日志级别控制
+const LOG_LEVEL = process.env.LOG_LEVEL || 'info';
+
+function log(level, ...args) {
+  if (LOG_LEVEL === 'debug' || (level !== 'debug')) {
+    console[level](...args);
+  }
+}
+
+// 请求ID中间件
+app.use((req, res, next) => {
+  req.id = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  res.setHeader('X-Request-ID', req.id);
+  next();
+});
+
+// 统一错误处理中间件
+app.use((err, req, res, next) => {
+  log('error', `[${req.id}] Unhandled error:`, err.message);
+  res.status(500).json({
+    success: false,
+    error: {
+      code: 'INTERNAL_ERROR',
+      message: 'Internal server error',
+      requestId: req.id
+    }
+  });
+});
+
 // 中间件
-app.use(cors()); // 允许跨域请求
-app.use(express.json()); // 解析JSON body
+app.use(cors());
+app.use(express.json());
+
+// 请求日志中间件
+app.use((req, res, next) => {
+  log('info', `[${req.id}] ${req.method} ${req.path}`);
+  next();
+});
 
 // 健康检查
 app.get('/health', (req, res) => {
   res.json({
-    status: 'ok',
-    timestamp: Date.now(),
-    config: {
+    success: true,
+    data: {
+      status: 'ok',
+      timestamp: Date.now(),
       chainId: config.chainId,
       kernelAddress: config.kernelAddress,
       entryPointAddress: config.entryPointAddress
@@ -38,46 +79,44 @@ app.post('/api/simulate', simulateUserOp);
 app.post('/api/construct-calldata', constructCalldata);
 app.post('/api/send-raw', sendRawTransaction);
 app.get('/api/delegation-status/:address', getDelegationStatus);
-app.get('/api/nonce/:address', getNonce);
-app.get('/api/kernel/address', getKernelInfo);
 
-// 404处理
+// 404处理 - 统一错误格式
 app.use((req, res) => {
   res.status(404).json({
-    error: 'Endpoint not found',
-    available: [
-      'POST /api/execute',
-      'POST /api/simulate',
-      'POST /api/construct-calldata',
-      'POST /api/send-raw',
-      'GET /api/delegation-status/:address',
-      'GET /api/nonce/:address',
-      'GET /health'
-    ]
-  });
-});
-
-// 错误处理
-app.use((err, req, res, next) => {
-  console.error('Unhandled error:', err);
-  res.status(500).json({
-    error: 'Internal server error',
-    message: err.message
+    success: false,
+    error: {
+      code: 'NOT_FOUND',
+      message: `Endpoint ${req.method} ${req.path} not found`,
+      available: [
+        'POST /api/execute',
+        'POST /api/simulate',
+        'POST /api/construct-calldata',
+        'POST /api/send-raw',
+        'GET /api/delegation-status/:address',
+        'GET /health'
+      ]
+    }
   });
 });
 
 // 启动服务器
 app.listen(config.port, () => {
-  console.log(`\n🚀 EIP-7702 Backend API running on port ${config.port}`);
-  console.log(`📍 Chain ID: ${config.chainId}`);
-  console.log(`📍 Kernel: ${config.kernelAddress}`);
-  console.log(`📍 EntryPoint: ${config.entryPointAddress}`);
-  console.log(`\nAvailable endpoints:`);
-  console.log(`  - POST http://localhost:${config.port}/api/execute`);
-  console.log(`  - POST http://localhost:${config.port}/api/simulate`);
-  console.log(`  - POST http://localhost:${config.port}/api/construct-calldata`);
-  console.log(`  - POST http://localhost:${config.port}/api/send-raw`);
-  console.log(`  - GET  http://localhost:${config.port}/api/delegation-status/:address`);
-  console.log(`  - GET  http://localhost:${config.port}/api/nonce/:address`);
-  console.log(`  - GET  http://localhost:${config.port}/health`);
+  console.log(`
+╔══════════════════════════════════════════════════════════════╗
+║          EIP-7702 Backend API Server                        ║
+╠══════════════════════════════════════════════════════════════╣
+║  Port:     ${config.port}
+║  Chain:    ${config.chainId}
+║  Kernel:   ${config.kernelAddress}
+║  EntryPoint: ${config.entryPointAddress}
+╠══════════════════════════════════════════════════════════════╣
+║  API Endpoints:                                             ║
+║  - POST /api/execute        (执行UserOp)                   ║
+║  - POST /api/simulate       (模拟执行)                      ║
+║  - POST /api/construct-calldata (构造calldata)             ║
+║  - POST /api/send-raw       (发送原始交易)                  ║
+║  - GET  /api/delegation-status/:address (查询delegation)   ║
+║  - GET  /health             (健康检查)                      ║
+╚══════════════════════════════════════════════════════════════╝
+  `);
 });
