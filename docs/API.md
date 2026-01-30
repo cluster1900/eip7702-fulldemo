@@ -18,6 +18,10 @@
 - ethers.js v6
 - Solidity ^0.8.20
 
+### 相关文档
+
+- **合约文档**: [CONTRACT.md](CONTRACT.md) - 详细了解Kernel合约接口和用法
+
 ---
 
 ## API端点
