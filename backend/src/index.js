@@ -10,6 +10,8 @@ import { simulateUserOp } from './routes/simulate.js';
 import { getDelegationStatus } from './routes/delegationStatus.js';
 import { getNonce } from './routes/nonce.js';
 import { getKernelInfo } from './routes/kernel.js';
+import { constructCalldata } from './routes/constructCalldata.js';
+import { sendRawTransaction } from './routes/sendRaw.js';
 
 const app = express();
 
@@ -33,6 +35,8 @@ app.get('/health', (req, res) => {
 // API路由
 app.post('/api/execute', executeUserOp);
 app.post('/api/simulate', simulateUserOp);
+app.post('/api/construct-calldata', constructCalldata);
+app.post('/api/send-raw', sendRawTransaction);
 app.get('/api/delegation-status/:address', getDelegationStatus);
 app.get('/api/nonce/:address', getNonce);
 app.get('/api/kernel/address', getKernelInfo);
@@ -44,6 +48,8 @@ app.use((req, res) => {
     available: [
       'POST /api/execute',
       'POST /api/simulate',
+      'POST /api/construct-calldata',
+      'POST /api/send-raw',
       'GET /api/delegation-status/:address',
       'GET /api/nonce/:address',
       'GET /health'
@@ -62,13 +68,15 @@ app.use((err, req, res, next) => {
 
 // 启动服务器
 app.listen(config.port, () => {
-  console.log(`🚀 EIP-7702 Backend API running on port ${config.port}`);
+  console.log(`\n🚀 EIP-7702 Backend API running on port ${config.port}`);
   console.log(`📍 Chain ID: ${config.chainId}`);
   console.log(`📍 Kernel: ${config.kernelAddress}`);
   console.log(`📍 EntryPoint: ${config.entryPointAddress}`);
   console.log(`\nAvailable endpoints:`);
   console.log(`  - POST http://localhost:${config.port}/api/execute`);
   console.log(`  - POST http://localhost:${config.port}/api/simulate`);
+  console.log(`  - POST http://localhost:${config.port}/api/construct-calldata`);
+  console.log(`  - POST http://localhost:${config.port}/api/send-raw`);
   console.log(`  - GET  http://localhost:${config.port}/api/delegation-status/:address`);
   console.log(`  - GET  http://localhost:${config.port}/api/nonce/:address`);
   console.log(`  - GET  http://localhost:${config.port}/health`);
