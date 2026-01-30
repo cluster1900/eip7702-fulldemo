@@ -193,10 +193,17 @@ function computeUserOpHash(userOp) {
     paymasterAndData: userOp.paymasterAndData
   };
 
-  return ethers.hashTypedData(domain, {
-    UserOperation: userOpTypes,
-    ...userOpData
-  });
+  // 使用 TypedDataEncoder 计算 EIP-712 hash
+  const typedData = {
+    domain: domain,
+    types: {
+      UserOperation: userOpTypes
+    },
+    primaryType: 'UserOperation',
+    message: userOpData
+  };
+
+  return ethers.TypedDataEncoder.hash(typedData.domain, typedData.types, typedData.message);
 }
 
 /**
@@ -221,18 +228,18 @@ function buildUserOp(params) {
   // 构造paymasterAndData
   const paymasterAndData = buildPaymasterAndData(tokenAddress, gasAmount);
 
-  // 返回完整的UserOp
+  // 返回完整的UserOp (所有BigInt转换为字符串以支持JSON序列化)
   return {
     sender,
-    nonce: BigInt(nonce),
+    nonce: BigInt(nonce).toString(),
     callData,
-    callGasLimit: DEFAULT_CALL_GAS_LIMIT,
-    verificationGasLimit: DEFAULT_VERIFICATION_GAS_LIMIT,
-    preVerificationGas: DEFAULT_PRE_VERIFICATION_GAS,
+    callGasLimit: DEFAULT_CALL_GAS_LIMIT.toString(),
+    verificationGasLimit: DEFAULT_VERIFICATION_GAS_LIMIT.toString(),
+    preVerificationGas: DEFAULT_PRE_VERIFICATION_GAS.toString(),
     maxFeePerGas: DEFAULT_MAX_FEE_PER_GAS.toString(),
     maxPriorityFeePerGas: DEFAULT_MAX_PRIORITY_FEE_PER_GAS.toString(),
     paymasterAndData,
-    signature: '0x' // 留空，由客户端签名
+    signature: '0x'
   };
 }
 

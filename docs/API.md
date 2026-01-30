@@ -11,6 +11,8 @@
 3. **执行UserOp** (`/api/execute`)
 4. **发送原始交易** (`/api/send-raw`)
 5. **查询delegation状态** (`/api/delegation-status/:address`)
+6. **ERC-1271签名验证** (`/api/validate-signature`)
+7. **ERC-7821批量执行** (`/api/execute` 支持mode参数)
 
 ### 技术栈
 
@@ -314,6 +316,138 @@ curl http://localhost:3000/api/nonce/0x1234...
 
 ---
 
+### 8. ERC-1271签名验证
+
+```http
+POST /api/validate-signature
+Content-Type: application/json
+```
+
+**描述**: 验证ERC-1271签名有效性，用于智能合约钱包的签名验证。
+
+**说明**:
+- ERC-1271是智能合约钱包签名验证的标准
+- 使用`isValidSignature(bytes32 hash, bytes signature)`函数
+- 返回magic value `0x1626ba7e`表示签名有效
+
+**请求参数**:
+```json
+{
+  "hash": "0x...",              // 必填, 要验证的hash
+  "signature": "0x..."          // 必填, 签名数据 (至少66字符)
+}
+```
+
+**响应** (200):
+```json
+{
+  "success": true,
+  "data": {
+    "valid": true,              // 签名是否有效
+    "message": "签名验证通过"
+  }
+}
+```
+
+**错误响应** (400):
+```json
+{
+  "success": false,
+  "error": {
+    "code": "INVALID_PARAMS",
+    "message": "signature 太短 (最少 66 字符)",
+    "requestId": "req_xxx"
+  }
+}
+```
+
+---
+
+### 9. ERC-1271批量签名验证
+
+```http
+POST /api/validate-signature/batch
+Content-Type: application/json
+```
+
+**描述**: 批量验证多个ERC-1271签名。
+
+**请求参数**:
+```json
+{
+  "signatures": [
+    {
+      "hash": "0x...",
+      "signature": "0x..."
+    },
+    {
+      "hash": "0x...",
+      "signature": "0x..."
+    }
+  ]
+}
+```
+
+**响应** (200):
+```json
+{
+  "success": true,
+  "data": {
+    "results": [
+      { "valid": true, "message": "签名验证通过" },
+      { "valid": false, "message": "签名验证失败" }
+    ],
+    "total": 2,
+    "validCount": 1
+  }
+}
+```
+
+---
+
+### 10. ERC-7821批量执行
+
+```http
+POST /api/execute
+Content-Type: application/json
+```
+
+**描述**: 支持ERC-7821标准的批量执行模式。
+
+**说明**:
+- ERC-7821定义了两种执行模式
+- `mode=1`: 普通批量执行 (Call[])
+- `mode=3`: 递归批量执行 (batch of batches)
+
+**请求参数**:
+```json
+{
+  "userOp": { ... },
+  "authorization": { ... },
+  "mode": 1  // 可选, 执行模式 (1=普通批量, 3=递归批量)
+}
+```
+
+**响应** (200):
+```json
+{
+  "success": true,
+  "data": {
+    "txHash": "0x...",
+    "mode": 1,
+    "delegated": false,
+    "executed": true,
+    "gasUsed": "150000"
+  }
+}
+```
+
+---
+
+## 错误代码
+
+---
+
 ## 错误代码
 
 | 代码 | 描述 |
@@ -432,7 +566,9 @@ main();
 |------|------|
 | `validateUserOp(PackedUserOperation, bytes32, uint256)` | 验证UserOp签名和nonce，处理gas支付 |
 | `executeBatch(Call[])` | 批量执行调用 |
+| `execute(uint256 mode, bytes data)` | ERC-7821批量执行 (mode=1普通, mode=3递归) |
 | `executeTokenTransfer(address, address, address, uint256)` | 执行ERC20代币转账 |
+| `isValidSignature(bytes32 hash, bytes signature)` | ERC-1271签名验证 |
 | `getNonce(address)` | 查询nonce |
 
 #### 事件

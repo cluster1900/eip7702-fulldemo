@@ -18,6 +18,7 @@ import { getDelegationStatus } from './routes/delegationStatus.js';
 import { getNonce } from './routes/nonce.js';
 import { constructCalldata } from './routes/constructCalldata.js';
 import { sendRawTransaction } from './routes/sendRaw.js';
+import { validateSignature, validateSignatureBatch } from './routes/validateSignature.js';
 
 const app = express();
 
@@ -81,6 +82,8 @@ app.post('/api/construct-calldata', constructCalldata);
 app.post('/api/send-raw', sendRawTransaction);
 app.get('/api/delegation-status/:address', getDelegationStatus);
 app.get('/api/nonce/:address', getNonce);
+app.post('/api/validate-signature', validateSignature);
+app.post('/api/validate-signature/batch', validateSignatureBatch);
 
 // 404处理 - 统一错误格式
 app.use((req, res) => {
@@ -94,6 +97,8 @@ app.use((req, res) => {
         'POST /api/simulate',
         'POST /api/construct-calldata',
         'POST /api/send-raw',
+        'POST /api/validate-signature',
+        'POST /api/validate-signature/batch',
         'GET /api/delegation-status/:address',
         'GET /api/nonce/:address',
         'GET /health'
@@ -113,14 +118,22 @@ app.listen(config.port, () => {
 ║  Kernel:   ${config.kernelAddress}
 ║  EntryPoint: ${config.entryPointAddress}
 ╠══════════════════════════════════════════════════════════════╣
+║  ERC-1271 / ERC-7821 Standards                              ║
+╠══════════════════════════════════════════════════════════════╣
 ║  API Endpoints:                                             ║
-║  - POST /api/execute        (执行UserOp)                   ║
-║  - POST /api/simulate       (模拟执行)                      ║
-║  - POST /api/construct-calldata (构造calldata)             ║
-║  - POST /api/send-raw       (发送原始交易)                  ║
-║  - GET  /api/delegation-status/:address (查询delegation)   ║
-║  - GET  /api/nonce/:address (查询UserOp nonce)             ║
-║  - GET  /health             (健康检查)                      ║
+║  - POST /api/execute           (ERC-7821 执行)             ║
+║  - POST /api/simulate          (模拟执行)                   ║
+║  - POST /api/construct-calldata(构造 calldata)              ║
+║  - POST /api/send-raw          (发送原始交易)                ║
+║  - POST /api/validate-signature(ERC-1271 验证)              ║
+║  - POST /api/validate-signature/batch (批量验证)            ║
+║  - GET  /api/delegation-status/:address (查询 delegation)  ║
+║  - GET  /api/nonce/:address    (查询 UserOp nonce)          ║
+║  - GET  /health                (健康检查)                   ║
+╠══════════════════════════════════════════════════════════════╣
+║  ERC-7821 执行模式:                                          ║
+║  - mode=1: 普通批量 (Call[])                                 ║
+║  - mode=3: 递归批量 (batch of batches)                       ║
 ╚══════════════════════════════════════════════════════════════╝
   `);
 });

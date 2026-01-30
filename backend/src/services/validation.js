@@ -105,25 +105,31 @@ function getAuthorizationDomain(contractAddress) {
  * });
  */
 export function hashUserOp(userOp) {
-  // 构造UserOp数据对象
+  // 构造UserOp数据对象 (所有BigInt转换为字符串)
   const userOpData = {
     sender: userOp.sender,
-    nonce: BigInt(userOp.nonce || 0),
+    nonce: BigInt(userOp.nonce || 0).toString(),
     callData: userOp.callData || '0x',
-    callGasLimit: BigInt(userOp.callGasLimit || 0),
-    verificationGasLimit: BigInt(userOp.verificationGasLimit || 0),
-    preVerificationGas: BigInt(userOp.preVerificationGas || 0),
-    maxFeePerGas: BigInt(userOp.maxFeePerGas || 0),
-    maxPriorityFeePerGas: BigInt(userOp.maxPriorityFeePerGas || 0),
+    callGasLimit: BigInt(userOp.callGasLimit || 0).toString(),
+    verificationGasLimit: BigInt(userOp.verificationGasLimit || 0).toString(),
+    preVerificationGas: BigInt(userOp.preVerificationGas || 0).toString(),
+    maxFeePerGas: BigInt(userOp.maxFeePerGas || 0).toString(),
+    maxPriorityFeePerGas: BigInt(userOp.maxPriorityFeePerGas || 0).toString(),
     paymasterAndData: userOp.paymasterAndData || '0x'
   };
 
-  // 使用ethers.js v6的hashTypedData方法计算EIP-712 hash
+  // 使用 ethers.js v6 的 TypedDataEncoder 计算 EIP-712 hash
   const domain = getUserOpDomain();
-  return ethers.hashTypedData(domain, {
-    UserOperation: USER_OP_TYPE,
-    ...userOpData
-  });
+  const typedData = {
+    domain: domain,
+    types: {
+      UserOperation: USER_OP_TYPE
+    },
+    primaryType: 'UserOperation',
+    message: userOpData
+  };
+
+  return ethers.TypedDataEncoder.hash(typedData.domain, typedData.types, typedData.message);
 }
 
 /**
@@ -191,19 +197,25 @@ export function hashAuthorization(authorization) {
   const domain = getAuthorizationDomain(authorization.address);
 
   const authData = {
-    chainId: BigInt(authorization.chainId),
+    chainId: BigInt(authorization.chainId).toString(),
     address: authorization.address,
-    nonce: BigInt(authorization.nonce)
+    nonce: BigInt(authorization.nonce).toString()
   };
 
-  return ethers.hashTypedData(domain, {
-    Authorization: [
-      { name: 'chainId', type: 'uint256' },
-      { name: 'address', type: 'address' },
-      { name: 'nonce', type: 'uint256' }
-    ],
-    ...authData
-  });
+  const typedData = {
+    domain: domain,
+    types: {
+      Authorization: [
+        { name: 'chainId', type: 'uint256' },
+        { name: 'address', type: 'address' },
+        { name: 'nonce', type: 'uint256' }
+      ]
+    },
+    primaryType: 'Authorization',
+    message: authData
+  };
+
+  return ethers.TypedDataEncoder.hash(typedData.domain, typedData.types, typedData.message);
 }
 
 /**
