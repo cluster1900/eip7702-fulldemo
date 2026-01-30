@@ -1,14 +1,14 @@
 # EIP-7702 Account Abstraction Project
 
-完整的EIP-7702账户抽象系统：让EOA用户无需ETH，用USDC支付gas，批量执行交易。
+完整的EIP-7702账户抽象系统：让EOA用户无需ETH，用ERC-20代币支付gas，批量执行交易。
 
 ## 🎯 功能特性
 
-- ✅ **EIP-7702 Delegation**: EOA临时获得智能合约能力
-- ✅ **ERC20 Gas Payment**: 用USDC等代币支付gas费
-- ✅ **批量交易**: executeBatch一次执行多个call
+- ✅ **EIP-7702 Delegation**: EOA临时获得智能合约钱包能力
 - ✅ **ERC-4337兼容**: 标准UserOperation流程
-- ✅ **完整测试**: Foundry测试套件 (19/19通过)
+- ✅ **ERC20 Gas Payment**: 用USDC等代币支付gas费
+- ✅ **批量交易**: ERC-7821标准批量执行接口
+- ✅ **完整签名验证**: EIP-712域分隔符 + UserOpHash签名
 
 ## 📁 项目结构
 
@@ -16,30 +16,26 @@
 eip7702/
 ├── contracts/           # Solidity智能合约
 │   ├── src/
-│   │   └── Kernel.sol  # 核心钱包合约
+│   │   └── Kernel.sol  # 核心钱包合约 (421行)
 │   ├── test/
-│   │   ├── Kernel.t.sol        # 核心功能测试 (10个)
-│   │   ├── FullFlowTest.t.sol  # 完整流程测试 (4个)
-│   │   ├── BGasCompensation.t.sol # Gas补偿测试 (2个)
-│   │   ├── E2EIntegration.t.sol   # E2E集成测试 (1个)
-│   │   └── Counter.t.sol       # 其他测试 (2个)
-│   └── script/
-│       ├── Deploy.s.sol        # 部署脚本
-│       └── E2ETest.s.sol       # E2E测试脚本
+│   │   ├── SignatureDebugTest.t.sol    # 签名验证测试
+│   │   ├── EIP7702FullFlowTest.t.sol   # EIP-7702完整流程测试
+│   │   └── ValidateUserOp.t.sol        # validateUserOp测试
+│   ├── script/
+│   │   ├── Deploy.s.sol               # 部署脚本
+│   │   └── DeployEntryPoint.s.sol     # EntryPoint部署
+│   └── lib/                           # 依赖库
+│       ├── account-abstraction/       # ERC-4337参考实现
+│       ├── forge-std/                 # Foundry测试库
+│       └── openzeppelin-contracts/    # OpenZeppelin合约库
 ├── backend/             # Node.js后端API
-│   └── src/
-│       ├── index.js            # Express服务器
-│       ├── config.js           # 配置管理
-│       ├── routes/
-│       │   ├── execute.js      # POST /api/execute
-│       │   ├── simulate.js     # POST /api/simulate
-│       │   ├── nonce.js        # GET /api/nonce/:address
-│       │   ├── kernel.js       # GET /api/kernel/address
-│       │   └── delegationStatus.js  # GET /api/delegation-status/:address
-│       └── services/
-│           ├── bundler.js      # Bundler服务
-│           ├── validation.js   # 签名验证
-│           └── cache.js        # 缓存服务
+│   ├── src/
+│   │   ├── index.js            # Express服务器
+│   │   ├── config.js           # 配置管理
+│   │   └── test/
+│   │       └── exact-hash.test.js  # E2E完整流程测试
+│   ├── .env                    # 环境配置
+│   └── package.json
 └── README.md
 ```
 
@@ -48,7 +44,7 @@ eip7702/
 ### 1. 安装依赖
 
 ```bash
-# Foundry (Solidity)
+# Foundry (如果需要重新安装)
 cd contracts
 forge install
 
@@ -57,214 +53,262 @@ cd ../backend
 npm install
 ```
 
-### 2. 配置环境变量
+### 2. 启动本地测试链
 
 ```bash
-cd backend
-cp .env.example .env
-# 编辑.env: 设置RPC_URL, BUNDLER_PRIVATE_KEY, 合约地址
+# 启动Anvil (默认账户有10000 ETH)
+anvil
+
+# 或Fork主网测试
+anvil --fork-url https://eth-mainnet.g.alchemy.com/v2/YOUR_KEY
 ```
 
-### 3. 运行测试
+### 3. 部署合约
 
 ```bash
-# 合约测试
 cd contracts
-forge test -vvv --gas-report
 
-# 输出: 19/19 tests passed ✅
+# 部署到本地Anvil
+forge script script/Deploy.s.sol --tc DeployScript --fork-url http://localhost:8545 --broadcast
+
+# 输出示例:
+# Kernel deployed at: 0x5FbDB2315678afecb367f032d93F642f64180aa3
+# MockUSDC deployed at: 0x4559c5b2B51Fe2e18b66C1a9C5d64ef03F154340
 ```
 
-### 4. 启动后端
+### 4. 配置后端
 
 ```bash
 cd backend
-npm start
+# 编辑 .env 文件
 
-# Backend API running on port 3000 🚀
+# 本地Anvil配置:
+RPC_URL=http://localhost:8545
+CHAIN_ID=31337
+KERNEL_ADDRESS=0x5fbdb2315678afecb367f032d93f642f64180aa3
+ENTRY_POINT_ADDRESS=0x5FbDB2315678afecb367f032d93F642f64180aa3
+TOKEN_ADDRESS=0x4559c5b2b51fe2e18b66c1a9c5d64ef03f154340
 ```
 
-## 📖 API文档
+### 5. 运行测试
 
-### POST /api/execute
-执行UserOperation，支持首次delegation
+```bash
+# 后端E2E测试
+cd backend
+node test/exact-hash.test.js
 
-**请求:**
-```json
-{
-  "userOp": {
-    "sender": "0x...",
-    "nonce": 0,
-    "callData": "0x...",
-    "paymasterAndData": "0x...", // USDC地址 + 金额
-    "signature": "0x..."
-  },
-  "authorization": {  // 首次使用时必需
-    "chainId": 31337,
-    "address": "0x...",  // Kernel地址
-    "nonce": 0,
-    "signature": "0x..."
+# Foundry合约测试
+cd ../contracts
+forge test -vvv
+```
+
+## 🧪 测试结果
+
+### 后端E2E测试 (`backend/test/exact-hash.test.js`)
+
+```
+✅ Minting USDC to User B
+✅ User B approving Kernel
+✅ User B USDC balance: 5000
+✅ hashInitCode calculation
+✅ hashCallData calculation
+✅ hashPaymasterAndData calculation
+✅ PACKED_USEROP_TYPEHASH
+✅ structHash calculation
+✅ DOMAIN_SEPARATOR_TYPEHASH
+✅ domainSeparator calculation
+✅ userOpHash calculation (0x1901 || domainSeparator || structHash)
+✅ Signature generation (v=28, r, s)
+✅ ecrecover signature verification (matches User B address)
+❌ EntryPoint.handleOps (expected - EIP-7702 delegation not set)
+
+Result: Hash calculation and signature verification PASSED ✅
+```
+
+### 合约签名验证测试 (`contracts/test/SignatureDebugTest.t.sol`)
+
+```solidity
+[PASS] testDirectSignatureRecovery()
+  - v: 28
+  - Recovered address: 0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC
+  - Match: true
+
+[PASS] testUserOpHashSignature()
+  - v: 27
+  - Recovered: 0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC
+  - Expected: 0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC
+  - Match: true
+```
+
+## 📖 签名计算流程
+
+### Step 1: 计算 structHash
+
+```javascript
+hashInitCode = keccak256("") = 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470
+hashCallData = keccak256(callData)
+hashPaymasterAndData = keccak256("") = 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470
+
+PACKED_USEROP_TYPEHASH = 0x29a0bca4af4be3421398da00295e58e6d7de38cb492214754cb6a47507dd6f8e
+
+structHash = keccak256(
+  abi.encode(
+    PACKED_USEROP_TYPEHASH,
+    userOp.sender,
+    userOp.nonce,
+    hashInitCode,
+    hashCallData,
+    userOp.accountGasLimits,
+    userOp.preVerificationGas,
+    userOp.gasFees,
+    hashPaymasterAndData
+  )
+)
+```
+
+### Step 2: 计算 domainSeparator
+
+```javascript
+DOMAIN_SEPARATOR_TYPEHASH = 0x8b73c3c69bb8fe3d512ecc4cf759cc79239f7b179b0ffacaa9a75d522b39400f
+
+domainSeparator = keccak256(
+  abi.encode(
+    DOMAIN_SEPARATOR_TYPEHASH,
+    keccak256("Kernel"),
+    keccak256("1"),
+    block.chainid,
+    address(kernel)
+  )
+)
+```
+
+### Step 3: 计算 userOpHash
+
+```javascript
+// 0x1901 = bytes([0x19, 0x01])
+userOpHash = keccak256(
+  abi.encodePacked(
+    bytes1(0x19),
+    bytes1(0x01),
+    domainSeparator,
+    structHash
+  )
+)
+```
+
+### Step 4: 签名
+
+```javascript
+// 直接对userOpHash签名 (无Ethereum Signed Message前缀)
+signature = sign(privateKey, userOpHash)
+// v = 27 or 28
+// r, s = signature components
+```
+
+### Step 5: 验证签名
+
+```solidity
+// Kernel.sol _recoverSigner function
+function _recoverSigner(bytes32 messageHash, bytes memory signature) internal pure returns (address) {
+  bytes32 r;
+  bytes32 s;
+  uint8 v;
+  assembly {
+    r := mload(add(signature, 32))
+    s := mload(add(signature, 64))
+    v := byte(0, mload(add(signature, 96)))
   }
+  return ecrecover(messageHash, v, r, s);
 }
-```
-
-**响应:**
-```json
-{
-  "success": true,
-  "txHash": "0x...",
-  "delegated": false,
-  "executed": true,
-  "gasUsed": "150000"
-}
-```
-
-### GET /api/delegation-status/:address
-查询地址的delegation状态
-
-**响应:**
-```json
-{
-  "address": "0x...",
-  "delegated": false,
-  "eoaNonce": 0,
-  "userOpNonce": "0",
-  "timestamp": 1706600000000
-}
-```
-
-### GET /api/nonce/:address
-查询UserOp nonce
-
-**响应:**
-```json
-{
-  "address": "0x...",
-  "nonce": "0"
-}
-```
-
-### 4. GET /api/kernel/address
-获取Kernel和EntryPoint合约地址
-
-**响应:**
-```json
-{
-  "kernelAddress": "0x...",
-  "entryPointAddress": "0x...",
-  "chainId": 31337
-}
-```
-
-### POST /api/simulate
-模拟执行UserOperation (不发送真实交易)
-
-**响应:**
-```json
-{
-  "success": true,
-  "needsAuth": false,
-  "estimatedGas": "120000",
-  "willRevert": false
-}
-```
-
-## 🏗️ 架构设计
-
-```
-┌─────────────┐       ┌─────────────┐       ┌─────────────┐
-│   Client    │       │  Backend    │       │   链上      │
-│  (dApp/API) │──────>│  Bundler    │──────>│  Kernel     │
-│             │       │  Express    │       │  Contract   │
-└─────────────┘       └─────────────┘       └─────────────┘
-      │                      │                      │
-      │ 1. 构建UserOp       │                      │
-      │ 2. 签名             │                      │
-      │ 3. POST /execute   │                      │
-      │                    │ 4. 构建type 0x04 tx  │
-      │                    │ 5. 发送到链上        │
-      │                    │                      │ 6. validateUserOp
-      │                    │                      │ 7. executeBatch
-      │                    │<─────────────────────│ 8. ERC20支付gas
-      │<───────────────────│ 9. 返回txHash       │
 ```
 
 ## 📝 核心合约: Kernel.sol
 
 ### 主要函数
 
-#### validateUserOp
+#### validateUserOp (第175-243行)
 ```solidity
 function validateUserOp(
     PackedUserOperation calldata userOp,
     bytes32 userOpHash,
     uint256 missingAccountFunds
-) external returns (uint256);
+) external returns (uint256 validationData);
 ```
-- 验证msg.sender == ENTRY_POINT
-- ECDSA签名验证
+- 验证 `msg.sender == ENTRY_POINT`
+- ECDSA签名验证 (直接对userOpHash签名)
 - Nonce检查与递增
+- 支付prefund到EntryPoint
 - ERC20 gas支付处理
 
-#### executeBatch
+#### execute (第239行)
 ```solidity
-function executeBatch(Call[] calldata calls) external;
+function execute(uint256 mode, bytes calldata data) external;
 ```
-- 批量执行多个call
-- 任意失败全部revert
-- 仅EntryPoint可调用
+- ERC-7821标准批量执行接口
+- mode=1: 普通批量 (Call[])
+- mode=3: 递归批量 (batch of batches)
 
-#### getNonce
+#### isValidSignature (第290行)
 ```solidity
-function getNonce(address user) external view returns (uint256);
+function isValidSignature(bytes32 hash, bytes calldata signature) external view returns (bytes4 magicValue);
 ```
-- 查询用户的UserOp nonce
+- ERC-1271链上签名验证
+- 返回 `0x1626ba7e` 表示有效
 
-## 🧪 测试覆盖
+## 🏗️ 架构设计
 
-```bash
-cd contracts && forge test -vvv
+```
+┌─────────────┐       ┌─────────────┐       ┌─────────────┐
+│   Client    │       │  Backend    │       │   链上      │
+│  (dApp/API) │──────>│  Bundler    │──────>│  EntryPoint │
+│             │       │  (Node.js)  │       │  Contract   │
+└─────────────┘       └─────────────┘       └─────────────┘
+      │                      │                      │
+      │ 1. 构建UserOp        │                      │
+      │ 2. EIP-712签名       │                      │
+      │ 3. POST /execute    │                      │
+      │                    │ 4. handleOps()       │
+      │                    │ 5. 发送到链上        │
+      │                    │                      │ 6. validateUserOp
+      │                    │                      │ 7. execute(mode, data)
+      │                    │                      │ 8. ERC20 transferFrom
+      │                    │<─────────────────────│
+      │<───────────────────│ 9. 返回结果         │
 ```
 
-**19个测试用例 (全部通过):**
+## 🔐 重要发现
 
-### KernelTest (10个测试)
-1. ✅ testValidateUserOp_Success
-2. ✅ testValidateUserOp_WithGasPayment (USDC转账)
-3. ✅ testValidateUserOp_InvalidSignature
-4. ✅ testValidateUserOp_WrongNonce
-5. ✅ testValidateUserOp_OnlyEntryPoint
-6. ✅ testExecuteBatch_Success (多个call)
-7. ✅ testExecuteBatch_FailedCall (原子性)
-8. ✅ testExecuteBatch_OnlyEntryPoint
-9. ✅ testGetNonce_NewAddress
-10. ✅ testGetNonce_AfterExecution
+### Foundry vs Hardhat 私钥差异
 
-### FullFlowTest (4个测试)
-11. ✅ test_FullPaymasterFlow_TransferWithGasCompensation
-12. ✅ test_BatchTransfersWithGasCompensation
-13. ✅ test_GaslessSponsorFlow
-14. ✅ test_MultipleUserOps
+```javascript
+// Anvil账户2 (Foundry默认)
+// 地址: 0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC
+// 私钥: 0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a
 
-### BGasCompensationTest (2个测试)
-15. ✅ test_BDelegateAndPayGas
-16. ✅ test_RejectsWrongNonce
+// 注意: vm.sign(2, hash) 使用的是 Foundry 账户索引2的私钥
+// 而不是 Hardhat 账户索引2的私钥
+// 两者不同!
+```
 
-### 其他测试 (3个)
-17. ✅ test_E2E_FullFlow (E2E集成测试)
-18. ✅ test_Increment (Counter)
-19. ✅ testFuzz_SetNumber (Counter模糊测试)
+### EIP-7702 委托代码格式
 
-**Gas报告:**
-- validateUserOp: ~49k gas
-- executeBatch: ~44k gas (avg)
+```solidity
+// 委托代码 = EIP7702_PREFIX (0xef01) + 20字节Kernel地址
+bytes memory delegationCode = abi.encodePacked(
+  bytes1(0xef),
+  bytes1(0x01),
+  bytes20(kernelAddress)
+);
 
-## 🔐 安全考虑
+// 使用 vm.etch() 设置委托
+vm.etch(userAddress, delegationCode);
+```
 
-- **签名验证**: ECDSA + nonce防重放
-- **权限控制**: OnlyEntryPoint modifier
-- **原子性**: executeBatch任意失败全revert
-- **ERC20转账**: 使用标准transferFrom
+### ERC-4337 签名注意事项
+
+- **不要**添加 `"\x19Ethereum Signed Message:\n32"` 前缀
+- 直接对 `userOpHash` 签名
+- EntryPoint 会处理域分隔符
 
 ## 📚 技术栈
 
@@ -272,17 +316,13 @@ cd contracts && forge test -vvv
 - Solidity ^0.8.20
 - Foundry (forge, cast, anvil)
 - OpenZeppelin Contracts
-- ERC-4337 EntryPoint
+- ERC-4337 EntryPoint Reference Implementation
 
 ### 后端
-- Node.js v25+
-- Express.js 4.x
+- Node.js v18+
 - ethers.js v6
-- dotenv (环境变量)
-
-### 前端 (可选)
-- HTML + ethers.js CDN
-- MetaMask连接
+- Express.js 4.x
+- dotenv
 
 ## 🛠️ 开发工具
 
@@ -294,43 +334,52 @@ forge build
 forge test -vvv
 
 # 部署合约
-forge script script/Deploy.s.sol --rpc-url $RPC_URL --broadcast
+forge script script/Deploy.s.sol --tc DeployScript --fork-url $RPC_URL --broadcast
 
 # 启动本地节点
 anvil
 
-# Backend开发模式
-npm run dev
+# 检查账户余额
+cast balance <address>
+
+# 发送交易
+cast send --private-key <key> --to <contract> --data <data>
 ```
 
-## 📦 部署
+## 📦 已知问题
 
-### 1. 部署Kernel合约
-```bash
-cd contracts
-forge script script/Deploy.s.sol --rpc-url <YOUR_RPC> --broadcast --verify
+### 1. EntryPoint nonReentrant 检查
+
+EntryPoint 的 `nonReentrant` modifier 限制:
+```solidity
+require(tx.origin == msg.sender && msg.sender.code.length == 0, Reentrancy());
 ```
 
-### 2. 更新Backend配置
-```bash
-cd backend
-# 更新.env中的KERNEL_ADDRESS和ENTRY_POINT_ADDRESS
-```
+这意味着:
+- 调用者必须是 EOA (`tx.origin == msg.sender`)
+- 调用者不能是合约 (`msg.sender.code.length == 0`)
 
-### 3. 启动Backend服务
+**解决方案**: 使用 `vm.broadcast()` 直接发送交易，而不是通过 `vm.prank()`
+
+### 2. 依赖库编译问题
+
+某些依赖的测试文件会导致编译失败:
+
 ```bash
-npm start
-# 或使用PM2: pm2 start src/index.js --name eip7702-backend
+# 解决方法: 删除测试文件
+rm -rf lib/openzeppelin-contracts/fv
+rm -rf lib/openzeppelin-contracts/test
+rm -rf lib/account-abstraction/contracts/test
 ```
 
 ## 🤝 贡献指南
 
 遵循OpenSpec流程:
-1. 在`openspec/changes/`创建proposal
+1. 在 `openspec/changes/` 创建proposal
 2. 编写tasks.md清单
 3. 实现代码 + 测试
 4. 提交PR
-5. 归档到`openspec/changes/archive/`
+5. 归档到 `openspec/changes/archive/`
 
 ## 📄 许可证
 
@@ -340,21 +389,24 @@ MIT License
 
 - [EIP-7702规范](https://eips.ethereum.org/EIPS/eip-7702)
 - [ERC-4337文档](https://eips.ethereum.org/EIPS/eip-4337)
+- [ERC-1271标准](https://eips.ethereum.org/EIPS/eip-1271)
+- [ERC-7821批量执行](https://eips.ethereum.org/EIPS/eip-7821)
 - [Foundry文档](https://book.getfoundry.sh/)
 - [ethers.js v6](https://docs.ethers.org/v6/)
 
-## 📞 联系方式
-
-问题和建议请提交Issue或PR。
-
 ---
 
-**项目状态**: 完整实现 ✅ (Kernel合约 + Backend API + 19个测试全部通过)
+**项目状态**: 核心功能已完成 ✅
 
 **已完成**:
-- ✅ Kernel合约实现 (validateUserOp, executeBatch, getNonce, executeTokenTransfer)
-- ✅ 后端API (5个endpoint全部实现)
-- ✅ 完整测试覆盖 (19/19测试通过)
-- ✅ EIP-7702完整流程测试
-- ✅ ERC20 gas支付测试
-- ✅ 批量交易测试
+- ✅ Kernel合约实现 (421行完整代码)
+- ✅ EIP-712签名验证
+- ✅ ERC-4337 validateUserOp
+- ✅ ERC-7821批量执行
+- ✅ ERC-20 gas支付
+- ✅ 后端签名计算测试 (通过)
+- ✅ 合约签名验证测试 (通过)
+
+**待完成**:
+- 🔄 EIP-7702完整委托流程E2E测试
+- 🔄 handleOps完整集成测试

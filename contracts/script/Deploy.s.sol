@@ -48,7 +48,7 @@ contract DeployScript is Script {
         uint256 deployerPrivateKey = 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80;
         vm.startBroadcast(deployerPrivateKey);
 
-        address entryPoint = 0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512;
+        address entryPoint = 0x5FbDB2315678afecb367f032d93F642f64180aa3;
 
         Kernel kernel = new Kernel(entryPoint);
         console.log("Kernel deployed at:", address(kernel));

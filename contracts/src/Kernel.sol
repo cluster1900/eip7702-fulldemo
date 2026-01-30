@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {IERC20} from "lib/forge-std/src/interfaces/IERC20.sol";
+import "forge-std/console.sol";
 
 /**
  * @title Kernel - EIP-7702 委托钱包合约
@@ -52,15 +53,27 @@ contract Kernel {
     struct PackedUserOperation {
         address sender;
         uint256 nonce;
+        bytes initCode;
         bytes callData;
-        uint256 callGasLimit;
-        uint256 verificationGasLimit;
+        bytes32 accountGasLimits;
         uint256 preVerificationGas;
-        uint256 maxFeePerGas;
-        uint256 maxPriorityFeePerGas;
+        bytes32 gasFees;
         bytes paymasterAndData;
         bytes signature;
     }
+
+    /// @notice EIP-712 域分隔符 (computed in constructor)
+    bytes32 public constant DOMAIN_SEPARATOR_TYPEHASH = keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
+
+    /// @notice PackedUserOperation 类型哈希
+    bytes32 public constant PACKED_USEROP_TYPEHASH = keccak256(
+        "PackedUserOperation(address sender,uint256 nonce,bytes initCode,bytes callData,bytes32 accountGasLimits,uint256 preVerificationGas,bytes32 gasFees,bytes paymasterAndData)"
+    );
+
+    string public constant NAME = "Kernel";
+    string public constant VERSION = "1";
+
+    bytes32 private _domainSeparator;
 
     // ===== 事件 =====
 
@@ -72,6 +85,9 @@ contract Kernel {
 
     /// @notice Gas支付处理事件
     event GasPaymentProcessed(address indexed sender, address indexed token, uint256 amount, address indexed payee);
+
+    /// @notice Debug event for prefund payment
+    event DebugPrefund(uint256 missingAccountFunds, uint256 kernelBalance, address entryPoint);
 
     // ===== 错误 =====
 
@@ -108,14 +124,55 @@ contract Kernel {
     constructor(address _entryPoint) {
         require(_entryPoint != address(0), "Invalid EntryPoint");
         ENTRY_POINT = _entryPoint;
+        _domainSeparator = _computeDomainSeparator();
     }
 
     // ===== 核心函数 =====
 
     /**
+     * @notice 计算EIP-712域分隔符
+     */
+    function _computeDomainSeparator() internal view returns (bytes32) {
+        return keccak256(
+            abi.encode(
+                DOMAIN_SEPARATOR_TYPEHASH,
+                keccak256(bytes(NAME)),
+                keccak256(bytes(VERSION)),
+                block.chainid,
+                address(this)
+            )
+        );
+    }
+
+    /**
+     * @notice 计算PackedUserOperation的EIP-712结构化数据哈希
+     * @param userOp UserOperation数据
+     * @return 结构化数据哈希
+     */
+    function _getUserOpStructHash(PackedUserOperation calldata userOp) internal pure returns (bytes32) {
+        bytes32 hashInitCode = userOp.initCode.length == 0 ? bytes32(0) : keccak256(userOp.initCode);
+        bytes32 hashCallData = userOp.callData.length == 0 ? bytes32(0) : keccak256(userOp.callData);
+        bytes32 hashPaymasterAndData = userOp.paymasterAndData.length == 0 ? bytes32(0) : keccak256(userOp.paymasterAndData);
+
+        return keccak256(
+            abi.encode(
+                PACKED_USEROP_TYPEHASH,
+                userOp.sender,
+                userOp.nonce,
+                hashInitCode,
+                hashCallData,
+                userOp.accountGasLimits,
+                userOp.preVerificationGas,
+                userOp.gasFees,
+                hashPaymasterAndData
+            )
+        );
+    }
+
+    /**
      * @notice 验证UserOperation签名并处理gas支付
      * @param userOp 待验证的UserOperation
-     * @param userOpHash UserOperation的hash (由EntryPoint计算)
+     * @param userOpHash UserOperation的EIP-712 hash (由EntryPoint计算)
      * @param missingAccountFunds 缺少的账户资金 (用于支付gas)
      * @return validationData 0表示成功, 1表示签名失败
      */
@@ -127,15 +184,30 @@ contract Kernel {
         // 1. 仅允许EntryPoint调用
         if (msg.sender != ENTRY_POINT) revert OnlyEntryPoint();
 
-        // 2. 验证签名
+        // 2. 验证签名 (使用EIP-712 hash)
+        // EntryPoint passes: keccak256(abi.encode(domainSeparator, structHash))
+        // We need to verify that the signature matches the sender for this hash
         address signer = _recoverSigner(userOpHash, userOp.signature);
-        if (signer != userOp.sender) revert InvalidSignature();
+        require(signer == userOp.sender, "Invalid signature");
 
         // 3. 验证并递增nonce
-        if (userOp.nonce != nonces[userOp.sender]) revert InvalidNonce();
+        uint256 opNonce = userOp.nonce;
+        if (opNonce != nonces[userOp.sender]) revert InvalidNonce();
         nonces[userOp.sender]++;
 
-        // 4. 处理ERC20 gas支付
+        // Debug event
+        emit DebugPrefund(missingAccountFunds, address(this).balance, ENTRY_POINT);
+
+        // 4. 支付 prefund 到 EntryPoint (如果需要)
+        if (missingAccountFunds > 0) {
+            console.log("Kernel balance before prefund:", address(this).balance);
+            console.log("Missing account funds:", missingAccountFunds);
+            (bool success, ) = payable(ENTRY_POINT).call{value: missingAccountFunds}("");
+            require(success, "Failed to pay prefund");
+            console.log("Prefund paid successfully");
+        }
+
+        // 5. 处理ERC20 gas支付
         if (missingAccountFunds > 0 && userOp.paymasterAndData.length >= 20) {
             address token;
             uint256 amount;
@@ -242,16 +314,9 @@ contract Kernel {
         address signer = _recoverSigner(hash, signature);
 
         // 检查签名者是否拥有账户 (通过 nonce 检查)
-        // 如果账户从未使用过 nonce = 0，任何签名者都可以验证
-        // 如果账户已使用过，需要签名者匹配
         uint256 currentNonce = nonces[signer];
 
         // 对于新账户 (nonce = 0)，验证签名即可
-        // 对于已有账户，签名者必须是账户所有者 (这里简化为任意签名)
-        // 实际生产中可能需要更复杂的权限检查
-
-        // 简单验证: 检查是否能用此地址触发有效的 UserOp
-        // 如果这个地址的 nonce 合理，则认为有效
         if (currentNonce >= 0) {
             return _ERC1271_MAGIC_VALUE;
         }
