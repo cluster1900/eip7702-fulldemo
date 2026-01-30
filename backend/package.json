@@ -1,0 +1,22 @@
+{
+  "name": "eip7702-backend",
+  "version": "1.0.0",
+  "description": "EIP-7702 Account Abstraction Backend API",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "test": "node --test test/*.test.js"
+  },
+  "keywords": ["eip7702", "account-abstraction", "bundler"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "ethers": "^6.10.0",
+    "dotenv": "^16.4.1",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {}
+}
