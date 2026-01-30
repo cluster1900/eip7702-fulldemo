@@ -188,7 +188,7 @@ contract Kernel {
         // EntryPoint passes: keccak256(abi.encode(domainSeparator, structHash))
         // We need to verify that the signature matches the sender for this hash
         address signer = _recoverSigner(userOpHash, userOp.signature);
-        require(signer == userOp.sender, "Invalid signature");
+        require(signer == userOp.sender, "Invalid signature from signer");
 
         // 3. 验证并递增nonce
         uint256 opNonce = userOp.nonce;
@@ -353,8 +353,14 @@ contract Kernel {
         uint256 numCalls = calls.length;
         require(numCalls <= _MAX_TX, TooManyCalls(numCalls, _MAX_TX));
 
+        console.log("_executeBatch: numCalls=", numCalls);
+        console.log("Kernel balance before=", address(this).balance);
+
         for (uint256 i = 0; i < numCalls; i++) {
+            console.log("Executing call to target");
             (bool success, ) = calls[i].target.call{value: calls[i].value}(calls[i].data);
+            console.log("Call success=", success);
+            console.log("Kernel balance after=", address(this).balance);
             if (!success) revert CallFailed(i);
         }
 
