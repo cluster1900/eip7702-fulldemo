@@ -116,6 +116,18 @@ contract Kernel {
     }
 
     /**
+     * @notice Executes ERC20 transferFrom on behalf of the sender
+     * @param token Token address to transfer
+     * @param from Source address (the user who delegated)
+     * @param to Recipient address
+     * @param amount Amount to transfer
+     * @dev Used by delegated accounts to transfer tokens they own. Only callable internally from executeBatch.
+     */
+    function executeTokenTransfer(address token, address from, address to, uint256 amount) external {
+        IERC20(token).transferFrom(from, to, amount);
+    }
+
+    /**
      * @notice Returns the current nonce for a given address
      * @param user Address to query nonce for
      * @return Current nonce value (0 for new addresses)
