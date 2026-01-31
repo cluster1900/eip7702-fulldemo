@@ -3,9 +3,9 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 import "../src/Kernel.sol";
-import { IEntryPoint } from "lib/account-abstraction/contracts/interfaces/IEntryPoint.sol";
-import { PackedUserOperation } from "lib/account-abstraction/contracts/interfaces/PackedUserOperation.sol";
-import { EntryPoint } from "lib/account-abstraction/contracts/core/EntryPoint.sol";
+import { IEntryPoint } from "../../lib/account-abstraction/contracts/interfaces/IEntryPoint.sol";
+import { PackedUserOperation } from "../../lib/account-abstraction/contracts/interfaces/PackedUserOperation.sol";
+import { EntryPoint } from "../../lib/account-abstraction/contracts/core/EntryPoint.sol";
 
 struct Call {
     address to;
@@ -14,8 +14,8 @@ struct Call {
 }
 
 contract EIP7702HandleOpsTest is Test {
-    address constant ENTRY_POINT = 0x5FbDB2315678afecb367f032d93F642f64180aa3;
-    address constant KERNEL = 0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512;
+    address constant ENTRY_POINT = 0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789; // Mainnet standard
+    address constant KERNEL = 0x1BBED5cE00949dc5b16E9f6A2e8A71F37c6FE86a;
     address constant USER_B = 0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC;
     uint256 constant USER_B_PRIVATE_KEY = 0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a;
     address constant BUNDLER = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266;

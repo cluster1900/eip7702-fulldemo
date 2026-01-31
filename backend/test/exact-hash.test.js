@@ -20,8 +20,9 @@ const ERC20_ABI = [
 function signEIP712Hash(privateKey, hash) {
   const signingKey = new ethers.SigningKey(privateKey);
   const sig = signingKey.sign(hash);
-  const vByte = sig.v === 27 ? '1b' : '1c';
-  return '0x' + sig.r.substring(2) + sig.s.substring(2) + vByte;
+  // v = 27 or 28 in ethers, keep as is for standard representation
+  const vHex = sig.v === 27 ? '1b' : '1c';
+  return '0x' + sig.r.substring(2) + sig.s.substring(2) + vHex;
 }
 
 async function main() {
@@ -83,7 +84,7 @@ async function main() {
 
   const userOp = {
     sender: userB.address,
-    nonce: 0n,
+    nonce: 2n,  // Try nonce=2
     initCode: '0x',
     callData: callData,
     accountGasLimits: accountGasLimits,
@@ -149,7 +150,8 @@ async function main() {
 
   // Step 3: Calculate final userOpHash exactly like EntryPoint.getUserOpHash()
   console.log('Step 3: Calculate userOpHash (0x1901 || domainSeparator || structHash)...');
-  
+
+  // For now, compute it manually (will verify against EntryPoint.getUserOpHash)
   const userOpHash = ethers.keccak256(
     ethers.concat([
       '0x1901',
@@ -157,7 +159,28 @@ async function main() {
       structHash
     ])
   );
-  console.log('  userOpHash:', userOpHash);
+  console.log('  userOpHash (manual):', userOpHash);
+
+  // Also get from EntryPoint to verify
+  const entryPointContract = new ethers.Contract(config.entryPointAddress, [
+    'function getUserOpHash((address sender, uint256 nonce, bytes initCode, bytes callData, bytes32 accountGasLimits, uint256 preVerificationGas, bytes32 gasFees, bytes paymasterAndData, bytes signature) memory userOp) view returns (bytes32)'
+  ], provider);
+
+  const userOpForEntryPoint = {
+    sender: userOp.sender,
+    nonce: userOp.nonce,
+    initCode: userOp.initCode,
+    callData: userOp.callData,
+    accountGasLimits: userOp.accountGasLimits,
+    preVerificationGas: userOp.preVerificationGas,
+    gasFees: userOp.gasFees,
+    paymasterAndData: userOp.paymasterAndData,
+    signature: userOp.signature
+  };
+
+  const userOpHashFromEP = await entryPointContract.getUserOpHash(userOpForEntryPoint);
+  console.log('  userOpHash (EntryPoint):', userOpHashFromEP);
+  console.log('  Match:', userOpHash === userOpHashFromEP);
   console.log('');
 
   // Step 4: Sign the hash
@@ -165,6 +188,7 @@ async function main() {
   const signature = signEIP712Hash(userBPrivateKey, userOpHash);
   userOp.signature = signature;
   console.log('  Signature:', signature);
+  console.log('  Signature length:', signature.length);
   console.log('');
 
   // Step 5: Verify the signature using ecrecover directly (no Ethereum prefix)
@@ -207,9 +231,11 @@ async function main() {
   ]);
 
   try {
+    // Send without gas estimation to avoid estimateGas issues
     const tx = await bundlerWallet.sendTransaction({
       to: config.entryPointAddress,
-      data: handleOpsData
+      data: handleOpsData,
+      gasLimit: 500000 // Set explicit gas limit
     });
     console.log('  Tx hash:', tx.hash);
     const receipt = await tx.wait();

@@ -65,6 +65,12 @@ contract Kernel {
     /// @notice EIP-712 域分隔符 (computed in constructor)
     bytes32 public constant DOMAIN_SEPARATOR_TYPEHASH = keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
 
+    /// @notice EntryPoint's DOMAIN_NAME hash (ERC4337)
+    bytes32 internal constant _DOMAIN_NAME_HASH = 0x21c3353240200136d47160000d7748a9a64b0e25f94bb6b3a5692119c09568c6;
+
+    /// @notice EntryPoint's DOMAIN_VERSION hash (1)
+    bytes32 internal constant _DOMAIN_VERSION_HASH = 0xc89efdaa54c0f20c7adf612882df0950f5a951637e0307cdcb4c672f298b8bc6;
+
     /// @notice PackedUserOperation 类型哈希
     bytes32 public constant PACKED_USEROP_TYPEHASH = keccak256(
         "PackedUserOperation(address sender,uint256 nonce,bytes initCode,bytes callData,bytes32 accountGasLimits,uint256 preVerificationGas,bytes32 gasFees,bytes paymasterAndData)"
@@ -130,14 +136,15 @@ contract Kernel {
     // ===== 核心函数 =====
 
     /**
-     * @notice 计算EIP-712域分隔符
+     * @notice 计算EIP-712域分隔符 (使用EntryPoint兼容的格式)
+     * @dev 使用ERC4337的name和version hash以与EntryPoint的getUserOpHash兼容
      */
     function _computeDomainSeparator() internal view returns (bytes32) {
         return keccak256(
             abi.encode(
                 DOMAIN_SEPARATOR_TYPEHASH,
-                keccak256(bytes(NAME)),
-                keccak256(bytes(VERSION)),
+                _DOMAIN_NAME_HASH,      // keccak256("ERC4337")
+                _DOMAIN_VERSION_HASH,   // keccak256("1")
                 block.chainid,
                 address(this)
             )
@@ -148,11 +155,13 @@ contract Kernel {
      * @notice 计算PackedUserOperation的EIP-712结构化数据哈希
      * @param userOp UserOperation数据
      * @return 结构化数据哈希
+     * @dev 使用与EntryPoint兼容的hash计算方式
      */
     function _getUserOpStructHash(PackedUserOperation calldata userOp) internal pure returns (bytes32) {
-        bytes32 hashInitCode = userOp.initCode.length == 0 ? bytes32(0) : keccak256(userOp.initCode);
-        bytes32 hashCallData = userOp.callData.length == 0 ? bytes32(0) : keccak256(userOp.callData);
-        bytes32 hashPaymasterAndData = userOp.paymasterAndData.length == 0 ? bytes32(0) : keccak256(userOp.paymasterAndData);
+        bytes32 emptyHash = 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470;
+        bytes32 hashInitCode = userOp.initCode.length == 0 ? emptyHash : keccak256(userOp.initCode);
+        bytes32 hashCallData = userOp.callData.length == 0 ? emptyHash : keccak256(userOp.callData);
+        bytes32 hashPaymasterAndData = userOp.paymasterAndData.length == 0 ? emptyHash : keccak256(userOp.paymasterAndData);
 
         return keccak256(
             abi.encode(
@@ -196,6 +205,11 @@ contract Kernel {
         nonces[userOp.sender]++;
 
         // Debug event
+        console.log("=== In validateUserOp ===");
+        console.log("msg.sender:", msg.sender);
+        console.log("address(this):", address(this));
+        console.log("Kernel balance (address(this)):", address(this).balance);
+        console.log("ENTRY_POINT constant:", ENTRY_POINT);
         emit DebugPrefund(missingAccountFunds, address(this).balance, ENTRY_POINT);
 
         // 4. 支付 prefund 到 EntryPoint (如果需要)
@@ -275,7 +289,13 @@ contract Kernel {
      * @dev 仅允许EntryPoint调用，已废弃，请使用 execute(1, data)
      */
     function executeBatch(Call[] calldata calls) external {
-        if (msg.sender != ENTRY_POINT) revert OnlyEntryPoint();
+        console.log("executeBatch called by:", msg.sender);
+        console.log("Expected entry point:", ENTRY_POINT);
+        if (msg.sender != ENTRY_POINT) {
+            console.log("REVERT: OnlyEntryPoint");
+            revert OnlyEntryPoint();
+        }
+        console.log("Calling _executeBatch with", calls.length, "calls");
         _executeBatch(calls);
     }
 

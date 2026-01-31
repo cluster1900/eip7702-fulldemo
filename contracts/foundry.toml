@@ -1,9 +1,20 @@
 [profile.default]
-src = "src"
 out = "out"
 libs = ["lib"]
 via_ir = true
 optimizer = true
-optimizer_runs = 200
+optimizer_runs = 30000
+
+[profile.release]
+via_ir = true
+optimizer = true
+optimizer_runs = 30000
+
+[rpc_endpoints]
+mainnet = "https://aged-white-voice.quiknode.pro/6bc3ae105f9e2a9e9711f9dd5760a1ccde88e998"
+local = "http://localhost:8545"
+
+[etherscan]
+mainnet = { key = "${ETHERSCAN_API_KEY}", chain = "1", url = "https://api.etherscan.io/api" }
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options

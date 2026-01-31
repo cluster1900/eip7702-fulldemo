@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Script.sol";
-import {EntryPoint} from "lib/account-abstraction/contracts/core/EntryPoint.sol";
+import {EntryPoint} from "../lib/account-abstraction/contracts/core/EntryPoint.sol";
 import "../src/Kernel.sol";
 import {IERC20} from "lib/forge-std/src/interfaces/IERC20.sol";
 
